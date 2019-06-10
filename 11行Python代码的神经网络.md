@@ -129,7 +129,7 @@ Output After Training:
 
 **第04行：**这是我们的“非线性”。虽然它可以是几种函数，但这种非线性映射了一种称为“sigmoid”的函数。 sigmoid函数将任何值映射到0到1之间的值。我们使用它将数字转换为概率。它还具有用于训练神经网络的若干其他期望属性。
 
-![1560132778043](/home/challow/.config/Typora/typora-user-images/1560132778043.png)
+![1560132778043](https://github.com/challow0/build_nn/blob/master/image/1.png)
 
 **第05行：**请注意，此函数还可以生成sigmoid的导数（当deriv = True时）。 sigmoid函数的一个理想特性是它的输出可用于创建其导数。如果sigmoid的输出是变量“out”，那么导数就是 out *（1-out）。这非常有效。
 
@@ -175,7 +175,7 @@ nonlin(l1,True)
 
 如果l1代表这三个点，则上面的代码生成下面几行的斜率。请注意，非常高的值（例如x = 2.0（绿点））和非常低的值（例如x = -1.0（紫点））具有相当浅的斜率。您可以拥有的最高斜率是x = 0（蓝点）。这起着重要作用。还要注意所有导数都在0到1之间。
 
-![1560133687937](/home/challow/.config/Typora/typora-user-images/1560133687937.png)
+![1560133687937](https://github.com/challow0/build_nn/blob/master/image/2.png)
 
 #### 整个声明：误差加权导数
 
@@ -189,7 +189,7 @@ l1_delta = l1_error * nonlin(l1,True)
 
 **第39行：**我们现在准备更新我们的网络了！我们来看一个单一的训练示例。
 
-![1560134764405](/home/challow/.config/Typora/typora-user-images/1560134764405.png)
+![1560134764405](https://github.com/challow0/build_nn/blob/master/image/3.png)
 
 在这个训练示例中，我们都设置了更新我们的权重。让我们更新最左边的权值（9.5）。
 
@@ -197,7 +197,7 @@ l1_delta = l1_error * nonlin(l1,True)
 
 对于最左边的权重，这将乘以1.0 * l1_delta。据推测，这将略微增加9.5。为什么只有一个小的和？嗯，预测已经非常自信了，预测基本上是正确的。小错误和小斜率意味着**非常小**的更新。考虑所有权重。三者都会略微增加。
 
-![1560134931257](/home/challow/.config/Typora/typora-user-images/1560134931257.png)
+![1560134931257](https://github.com/challow0/build_nn/blob/master/image/4.png)
 
 但是，因为我们正在使用“完整批量”构造，所以我们在所有四个训练示例上执行上述步骤。所以，它看起来更像上面的图像。那么，第39行做了什么？它计算每个训练样例的每个权重的权重更新，对它们求和，并更新权重，所有这些都在一个简单的行中。玩矩阵乘法，你会看到它做到这一点！
 
