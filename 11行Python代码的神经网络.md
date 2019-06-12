@@ -328,3 +328,25 @@ for j in xrange(60000):
 一切都应该看起来很熟悉！它实际上只是之前实现中的两个相互叠加。第一层（l1）的输出是第二层的输入。这里发生的唯一新事物是第43行。
 
 **第43行**：使用来自l2的“置信度加权误差”来为l1建立误差。这样做，它只是通过权重将误差从l2送到到l1。这给出了你可以称之为“贡献加权误差”的东西，因为我们知道l1中的每个节点值对l2中的错误“贡献”了多少。此步骤称为“反向传播”，是算法的同名。然后，我们使用与2层实现中相同的步骤更新syn0。
+
+## 第三部分：结论和未来工作
+
+#### 我的建议：
+
+如果你对神经网络很认真，我有一个建议。**尝试从内存重建此网络**。我知道这可能听起来有点疯狂，但它确实有帮助。如果您希望能够根据新的学术论文创建任意架构，或者阅读并理解这些不同架构的示例代码，我认为这是一个杀手级的练习。我认为即使您使用的是Torch，Caffe或Theano等框架也很有用。在进行这项练习之前，我使用神经网络工作了几年，这是我在该领域所做的最好的投资（并且不需要很长时间）。
+
+#### 未来工作：
+
+这个玩具示例仍然需要相当多的花里胡哨才能真正接近最先进的架构。如果您想进一步改善网络，可以参考以下几点。 （也许我会在后续帖子中。）
+
+• Alpha 
+• [Bias Units](http://stackoverflow.com/questions/2480650/role-of-bias-in-neural-networks)
+• [Mini-Batches](https://class.coursera.org/ml-003/lecture/106)
+• Delta Trimming 
+• [Parameterized Layer Sizes](https://www.youtube.com/watch?v=XqRUHEeiyCs)
+• [Regularization](https://class.coursera.org/ml-003/lecture/63)
+• [Dropout](http://videolectures.net/nips2012_hinton_networks/)
+• [Momentum](https://www.youtube.com/watch?v=XqRUHEeiyCs)
+• [Batch Normalization](http://arxiv.org/abs/1502.03167) 
+• GPU Compatability
+• Other Awesomeness You Implement
