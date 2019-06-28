@@ -233,3 +233,98 @@ train: function() {
     }
 ```
 
+### 一台服务器(`server.py`)
+
+尽管是一个简单地传递信息的小型服务器，我们仍然需要考虑如何接收和处理HTTP请求。首先，我们需要决定使用哪种HTTP请求。在上一节中，客户端正在使用POST，但为什么我们决定使用它？由于数据正在发送到服务器，因此PUT或POST请求最有意义。我们只需要发送一个json正文并且没有URL参数。因此从理论上讲，GET请求也可以起作用，但在语义上没有意义。然而，PUT和POST之间的选择是程序员之间长期持续的争论; KNPLabs以幽默的方式总结了这些问题。
+
+另一个考虑因素是是否将“训练”与“预测”请求发送到不同的端点（例如，`http：// localhost / train``和http：// localhost / predict`）或相同的端点，然后分别处理数据。在这种情况下，我们可以采用后一种方法，因为在每种情况下对数据所做的事情之间的差异很小，足以适应短的if语句。实际上，如果服务器要对每种请求类型进行更详细的处理，最好将这些作为单独的端点。此决定反过来影响了何时使用了服务器错误代码。例如，当有效载荷中未指定“train”或“predict”时，将发送400“Bad Request”错误。如果使用单独的端点，这将不是问题。由OCR系统在后台完成的处理可能由于任何原因而失败，如果在服务器内未正确处理，则发送500“内部服务器错误”。同样，如果端点是分开的，那么将有更多的空间来详细发送更多适当的错误。例如，确定内部服务器错误实际上是由错误请求引起的。
+
+最后，我们需要决定何时何地初始化OCR系统。一个好的方法是在`server.py`中但在服务器启动之前初始化它。这是因为在第一次运行时，OCR系统需要在第一次启动时对一些预先存在的数据进行网络训练，这可能需要几分钟。如果服务器在此处理完成之前启动，则任何训练或预测的请求都会抛出异常，因为在给定当前实现的情况下，OCR对象尚未初始化。另一种可能的实现可能会创建一些不准确的初始ANN用于前几个查询，而新的ANN在后台进行异步训练。这种替代方法确实允许ANN立即使用，但实现更复杂，并且只有在服务器重置时才能在服务器启动时节省时间。这种类型的实现对于需要高可用性的OCR服务更有利。
+
+在这里，我们将大部分服务器代码放在一个处理POST请求的短函数中。
+
+```python
+ def do_POST(s):
+        response_code = 200
+        response = ""
+        var_len = int(s.headers.get('Content-Length'))
+        content = s.rfile.read(var_len);
+        payload = json.loads(content);
+
+        if payload.get('train'):
+            nn.train(payload['trainArray'])
+            nn.save()
+        elif payload.get('predict'):
+            try:
+                response = {
+                    "type":"test", 
+                    "result":nn.predict(str(payload['image']))
+                }
+            except:
+                response_code = 500
+        else:
+            response_code = 400
+
+        s.send_response(response_code)
+        s.send_header("Content-type", "application/json")
+        s.send_header("Access-Control-Allow-Origin", "*")
+        s.end_headers()
+        if response:
+            s.wfile.write(json.dumps(response))
+        return
+```
+
+### 设计前馈ANN(``neural_network_design.py``)
+
+在设计前馈ANN时，我们必须考虑几个因素。第一个是使用什么激活功能。我们之前提到过激活函数作为节点输出的决策者。激活函数的决策类型将帮助我们决定使用哪一个。在我们的例子中，我们将设计一个ANN，为每个数字（0-9）输出0到1之间的值。接近1的值意味着ANN预测这是绘制的数字，而接近0的值意味着它预测不是绘制的数字。因此，我们想要一个激活函数，其输出接近0或接近1.我们还需要一个可微分的函数，因为我们需要导数用于我们的反向传播计算。在这种情况下，常用的函数是sigmoid，因为它满足这两个约束。
+StatSoft提供了一个很好的常见激活函数及其属性列表。
+
+要考虑的第二个因素是我们是否想要包含偏差。我们之前已经提到了几次偏差，但还没有真正谈到它们是什么或者为什么我们使用它们。让我们通过回到图15.1中计算节点输出的方式来尝试理解这一点。假设我们有一个输入节点和一个输出节点，我们的输出公式将是y= f（wx），其中y是输出，f（）是激活函数，w是节点之间链接的权重，和x是节点的变量输入。偏置本质上是一个节点，其输出始终为1.这会将输出公式更改为y= f（wx+b），其中b是偏置节点和下一个节点之间连接的权重。如果我们将w和b视为常数而x视为变量，那么添加偏差会给我们的线性函数输入增加一个常数f（.）。
+
+因此，添加偏差允许y截距的移位，并且通常为节点的输出提供更大的灵活性。包含偏差通常是一种很好的做法，特别是对于具有少量输入和输出的ANN。偏差允许ANN的输出具有更大的灵活性，从而为ANN提供更大的准确空间。如果没有偏差，我们就不太可能使用ANN进行正确的预测，或者需要更多隐藏的节点来进行更准确的预测。
+
+要考虑的其他因素是隐藏层的数量和每层隐藏节点的数量。对于具有许多输入和输出的较大人工神经网络，这些数字是通过尝试不同的值并测试网络性能来决定的。在这种情况下，通过训练给定大小的ANN并查看验证集的正确分类百分比来测量性能。在大多数情况下，单个隐藏层足以获得良好的性能，因此我们仅在此处尝试隐藏节点的数量。
+
+```python
+# Try various number of hidden nodes and see what performs best
+for i in xrange(5, 50, 5):
+    nn = OCRNeuralNetwork(i, data_matrix, data_labels, train_indices, False)
+    performance = str(test(data_matrix, data_labels, test_indices, nn))
+    print "{i} Hidden Nodes: {val}".format(i=i, val=performance)
+```
+
+在这里，我们用5到50个隐藏节点初始化一个ANN，增量为5.然后调用`test（）`函数。
+
+```python
+def test(data_matrix, data_labels, test_indices, nn):
+    avg_sum = 0
+    for j in xrange(100):
+        correct_guess_count = 0
+        for i in test_indices:
+            test = data_matrix[i]
+            prediction = nn.predict(test)
+            if data_labels[i] == prediction:
+                correct_guess_count += 1
+
+        avg_sum += (correct_guess_count / float(len(test_indices)))
+    return avg_sum / 100
+```
+
+内循环计算正确分类的数量，然后将其除以最后尝试分类的数量。这给出了ANN的比率或百分比准确度。由于每次训练ANN时，其权重可能略有不同，我们在外循环中重复此过程100次，因此我们可以对该特定ANN配置的精确度进行平均。在我们的例子中，`neural_network_design.py`的示例运行如下所示：
+
+```python
+PERFORMANCE
+-----------
+5 Hidden Nodes: 0.7792
+10 Hidden Nodes: 0.8704
+15 Hidden Nodes: 0.8808
+20 Hidden Nodes: 0.8864
+25 Hidden Nodes: 0.8808
+30 Hidden Nodes: 0.888
+35 Hidden Nodes: 0.8904
+40 Hidden Nodes: 0.8896
+45 Hidden Nodes: 0.8928
+```
+
+从这个输出中我们可以得出结论，15个隐藏节点将是最优的。从10到15添加5个节点会使我们的准确度提高约1％，而将准确度再提高1％则需要添加另外20个节点。增加隐藏节点数也会增加计算开销。因此，需要更长时间训练更多隐藏节点的网络并进行预测。因此，我们选择使用导致精确度显着提高的最后隐藏节点数。当然，在设计人工神经网络时，计算开销没有问题是可能的，并且最重要的是拥有最准确的人工神经网络。在这种情况下，最好选择45个隐藏节点而不是15个。
+
