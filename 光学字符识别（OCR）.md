@@ -328,3 +328,64 @@ PERFORMANCE
 
 从这个输出中我们可以得出结论，15个隐藏节点将是最优的。从10到15添加5个节点会使我们的准确度提高约1％，而将准确度再提高1％则需要添加另外20个节点。增加隐藏节点数也会增加计算开销。因此，需要更长时间训练更多隐藏节点的网络并进行预测。因此，我们选择使用导致精确度显着提高的最后隐藏节点数。当然，在设计人工神经网络时，计算开销没有问题是可能的，并且最重要的是拥有最准确的人工神经网络。在这种情况下，最好选择45个隐藏节点而不是15个。
 
+### 核心OCR功能
+
+在本节中，我们将讨论如何通过反向传播实现实际训练，如何使用网络进行预测，以及核心功能的其他关键设计决策。
+
+#### 通过反向传播进行训练(`ocr.py`)
+
+我们使用反向传播算法来训练我们的ANN。它包含4个主要步骤，对训练集中的每个样本重复，每次更新ANN权重。
+
+首先，我们将权重初始化为小的（在-1和1之间）随机值。在我们的例子中，我们将它们初始化为介于-0.06和0.06之间的值，并将它们存储在矩阵`theta1`，`theta2`，`input_layer_bias`和`hidden_layer_bias`中。由于层中的每个节点都链接到下一层中的每个节点，因此我们可以创建一个具有m行和n列的矩阵，其中n是一层中的节点数，m是相邻层中的节点数。他的矩阵代表这两层之间链接的所有权重。这里`theta1`有400列，用于20x20像素输入和`num_hidden_nodes`行。同样，`theta2`表示隐藏层和输出层之间的链接。它有`num_hidden_nodes`列和`NUM_DIGITS`（`10`）行。其他两个向量（1行），`input_layer_bias`和`hidden_layer_bias`表示偏差。
+
+```python
+ def _rand_initialize_weights(self, size_in, size_out):
+        return [((x * 0.12) - 0.06) for x in np.random.rand(size_out, size_in)]
+```
+
+```python
+ 			self.theta1 = self._rand_initialize_weights(400, num_hidden_nodes)
+            self.theta2 = self._rand_initialize_weights(num_hidden_nodes, 10)
+            self.input_layer_bias = self._rand_initialize_weights(1, 
+                                                                  num_hidden_nodes)
+            self.hidden_layer_bias = self._rand_initialize_weights(1, 10)
+```
+
+第二步是前向传播，它主要是从输入节点开始逐层计算节点输出，如什么是人工神经网络？所述。这里，`y0`是一个大小为400的数组，其中包含我们希望用于训练ANN的输入。我们将`theta1`乘以`y0`转置，以便我们有两个大小`（num_hidden_nodesx 400）*（400 x 1）`的矩阵，并且具有大小为num_hidden_nodes的隐藏层的结果输出向量。然后我们添加偏向量并将向量化的sigmoid激活函数应用于此输出向量，给出`y1`。`y1`是隐藏层的输出向量。再次重复相同的过程以计算输出节点的`y2`。 `y2`现在是我们的输出层向量，其值表示其索引是绘制数字的可能性。例如，如果某人绘制了8，则如果ANN已经做出正确的预测，则第8个索引处的`y2`值将是最大值。然而，6可能具有比绘制数字1更高的可能性，因为它看起来更像8并且更可能用尽相同的像素来绘制8.`y2`随着每个附加的绘制数字ANN变得更准确受过训练。
+
+```python
+    # The sigmoid activation function. Operates on scalars.
+    def _sigmoid_scalar(self, z):
+        return 1 / (1 + math.e ** -z)
+```
+
+```python
+            y1 = np.dot(np.mat(self.theta1), np.mat(data['y0']).T)
+            sum1 =  y1 + np.mat(self.input_layer_bias) # Add the bias
+            y1 = self.sigmoid(sum1)
+
+            y2 = np.dot(np.array(self.theta2), y1)
+            y2 = np.add(y2, self.hidden_layer_bias) # Add the bias
+            y2 = self.sigmoid(y2)
+```
+
+第三步是反向传播，其涉及计算输出节点处的错误，然后在每个中间层处向输入返回。这里我们首先创建一个预期的输出向量`actual_vals`，在数字的索引处有1表示绘制数字的值，否则为`0`。通过从`actual_vals`中减去实际输出向量`y2`来计算输出节点处的错误向量`output_errors`。对于之后的每个隐藏层，我们计算两个组件。首先，我们将下一层的转置权重矩阵乘以其输出误差。然后我们将激活函数的导数应用于前一层。然后，我们对这两个组件执行逐元素乘法，为隐藏层提供错误向量。这里我们称之为`hidden_errors`。
+
+```python
+            actual_vals = [0] * 10 
+            actual_vals[data['label']] = 1
+            output_errors = np.mat(actual_vals).T - np.mat(y2)
+            hidden_errors = np.multiply(np.dot(np.mat(self.theta2).T, output_errors), 
+                                        self.sigmoid_prime(sum1))
+```
+
+权重更新，根据先前计算的错误调整ANN权重。通过矩阵乘法在每一层更新权重。每层的误差矩阵乘以前一层的输出矩阵。然后将该乘积乘以称为学习率的标量并将其加到权重矩阵中。学习率是0到1之间的值，它影响ANN中学习的速度和准确性。较大的学习速率值将生成一个快速学习但不太准确的人工神经网络，而较小的值将产生一个学习速度较慢但更准确的人工神经网络。在我们的例子中，我们的学习率相对较小，为0.1。这很有效，因为我们不需要立即训练ANN以便用户继续训练或预测请求。通过简单地将学习速率乘以层的误差向量来更新偏差。
+
+```python
+            self.theta1 += self.LEARNING_RATE * np.dot(np.mat(hidden_errors), 
+                                                       np.mat(data['y0']))
+            self.theta2 += self.LEARNING_RATE * np.dot(np.mat(output_errors), 
+                                                       np.mat(y1).T)
+            self.hidden_layer_bias += self.LEARNING_RATE * output_errors
+            self.input_layer_bias += self.LEARNING_RATE * hidden_errors
+```
