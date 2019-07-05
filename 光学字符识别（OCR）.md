@@ -389,3 +389,63 @@ PERFORMANCE
             self.hidden_layer_bias += self.LEARNING_RATE * output_errors
             self.input_layer_bias += self.LEARNING_RATE * hidden_errors
 ```
+
+#### 测试受过训练的网络(`ocr.py`)
+
+一旦人工神经网络通过反向传播进行了训练，使用它进行预测就相当简单。正如我们在这里看到的，首先我们 计算ANN的输出，`y2`，就像我们在反向传播的第2步中所做的那样。然后我们在向量中查找具有最大值的索引。该指数是ANN预测的数字。
+
+```python
+def predict(self, test):
+        y1 = np.dot(np.mat(self.theta1), np.mat(test).T)
+        y1 =  y1 + np.mat(self.input_layer_bias) # Add the bias
+        y1 = self.sigmoid(y1)
+
+        y2 = np.dot(np.array(self.theta2), y1)
+        y2 = np.add(y2, self.hidden_layer_bias) # Add the bias
+        y2 = self.sigmoid(y2)
+
+        results = y2.T.tolist()[0]
+        return results.index(max(results))
+```
+
+#### 其他设计决策(`ocr.py`)
+
+在线提供了许多资源，可以更详细地介绍反向传播的实施。一个很好的资源来自威拉米特大学的课程。它遍历了反向传播的步骤，然后解释了如何将其转换为矩阵形式。虽然使用矩阵的计算量与使用循环相同，但好处是代码更简单，更易于使用更少的嵌套循环进行读取。正如我们所看到的，整个训练过程使用矩阵代数在25行代码中编写。
+
+正如在简单OCR系统中引入设计决策中所提到的，持续人工神经网络的权重意味着当服务器因任何原因关闭或突然停机时，我们不会失去它的训练进度。我们通过将权重写为JSON来保存权重。在启动时，OCR将ANN的已保存权重加载到内存中。保存功能不是由OCR在内部调用，而是由服务器决定何时执行保存。在我们的例子中，服务器在每次更新后保存权重。这是一个快速而简单的解决方案，但它并不是最佳的，因为写入磁盘非常耗时。这也阻止我们处理多个并发请求，因为没有机制可以防止同时写入同一个文件。在更复杂的服务器中，可以在关机时或每隔几分钟使用某种形式的锁定或时间戳协议进行保存，以确保没有数据丢失。
+
+```python
+def save(self):
+        if not self._use_file:
+            return
+
+        json_neural_network = {
+            "theta1":[np_mat.tolist()[0] for np_mat in self.theta1],
+            "theta2":[np_mat.tolist()[0] for np_mat in self.theta2],
+            "b1":self.input_layer_bias[0].tolist()[0],
+            "b2":self.hidden_layer_bias[0].tolist()[0]
+        };
+        with open(OCRNeuralNetwork.NN_FILE_PATH,'w') as nnFile:
+            json.dump(json_neural_network, nnFile)
+
+    def _load(self):
+        if not self._use_file:
+            return
+
+        with open(OCRNeuralNetwork.NN_FILE_PATH) as nnFile:
+            nn = json.load(nnFile)
+        self.theta1 = [np.array(li) for li in nn['theta1']]
+        self.theta2 = [np.array(li) for li in nn['theta2']]
+        self.input_layer_bias = [np.array(nn['b1'][0])]
+        self.hidden_layer_bias = [np.array(nn['b2'][0])]
+```
+
+### 结论
+
+现在我们已经了解了人工智能，人工神经网络，反向传播以及构建端到端的OCR系统，让我们回顾一下本章的重点和全局。
+
+我们首先介绍了人工智能，人工神经网络以及我们将要实施的内容。我们讨论了AI是什么以及它是如何使用的例子。我们看到AI本质上是一组算法或解决问题的方法，它们可以像人类一样以类似的方式提供问题的答案。然后我们看一下前馈 ANN的结构。我们了解到，计算给定节点的输出就像对前一节点的输出产品及其连接权重求和一样简单。我们讨论了如何使用ANN，首先格式化输入并将数据划分为训练和验证集。
+
+一旦我们有了一些背景知识，我们就开始谈论创建一个基于Web的客户端 - 服务器系统，该系统将处理用户训练或测试OCR的请求。然后，我们讨论了客户端如何将绘制的像素解释为数组并对OCR服务器执行HTTP请求以执行培训或测试。我们讨论了简单服务器如何读取请求以及如何通过测试几个隐藏节点计数的性能来设计ANN。我们通过核心培训和测试反向传播代码完成了。
+
+虽然我们已经构建了一个看似功能强大的OCR系统，但本章只是简单介绍了真正的OCR系统如何工作。更复杂的OCR系统可以具有预处理输入，使用混合ML算法，具有更广泛的设计阶段或其他进一步优化。
